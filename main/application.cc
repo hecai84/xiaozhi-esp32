@@ -7,6 +7,7 @@
 #include "websocket_protocol.h"
 #include "assets/lang_config.h"
 #include "mcp_server.h"
+#include "mcp/alarm.h"
 
 #include <cstring>
 #include <esp_log.h>
@@ -506,6 +507,10 @@ void Application::Start() {
         // Play the success sound to indicate the device is ready
         audio_service_.PlaySound(Lang::Sounds::OGG_SUCCESS);
     }
+
+    // Initialize Alarm Manager after protocol ready so that time (if synced) can be used
+    AlarmManager::GetInstance().Initialize();
+    AlarmManager::GetInstance().AddMcpTools();
 
     // Print heap stats
     SystemInfo::PrintHeapStats();
