@@ -39,6 +39,11 @@ std::string Settings::GetString(const std::string& key, const std::string& defau
 
 void Settings::SetString(const std::string& key, const std::string& value) {
     if (read_write_) {
+        nvs_stats_t stats;
+        ESP_ERROR_CHECK(nvs_get_stats(NULL, &stats));
+        ESP_LOGI("NVS", "Used=%u Free=%u All=%u Namespaces=%u Key=%s Value=%s",
+         stats.used_entries, stats.free_entries, stats.total_entries, stats.namespace_count,
+         key.c_str(), value.c_str());
         ESP_ERROR_CHECK(nvs_set_str(nvs_handle_, key.c_str(), value.c_str()));
         dirty_ = true;
     } else {
