@@ -10,6 +10,7 @@
 #include <mutex>
 #include <deque>
 #include <memory>
+#include <functional>
 
 #include "protocol.h"
 #include "ota.h"
@@ -58,6 +59,8 @@ public:
     void SetAecMode(AecMode mode);
     AecMode GetAecMode() const { return aec_mode_; }
     void PlaySound(const std::string_view& sound);
+    // 发送一段文本, 让服务器按 STT 最终识别结果处理, 触发后续 TTS
+    void RequestTts(const std::string& text);
     AudioService& GetAudioService() { return audio_service_; }
 
 private:

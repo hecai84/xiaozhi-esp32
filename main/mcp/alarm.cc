@@ -276,6 +276,8 @@ void AlarmManager::OnTimerFired() {
 				auto display = Board::GetInstance().GetDisplay();
 				if (display) display->SetChatMessage("assistant", text.c_str());
 			});
+			// 4. 伪装最终识别文本触发服务器回答与 TTS
+			Application::GetInstance().RequestTts("有个提醒,"+a.label);
             
 
 			// 计算下一次
