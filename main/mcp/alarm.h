@@ -26,6 +26,7 @@ struct AlarmItem {
     int day = 0;                // 一次性 & 每月闹钟 (1-31)
     int hour = 0;               // 0-23
     int minute = 0;             // 0-59
+    int second = 0;             // 0-59 秒级精度
     uint16_t weekdays_mask = 0; // 每周闹钟使用, bit0=Mon ... bit6=Sun
     std::string label;          // 文字标签
     time_t next_trigger = 0;    // 下次触发时间（UTC）

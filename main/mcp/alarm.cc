@@ -39,14 +39,14 @@ static time_t timegm_compat(struct tm* t) {
 	long seconds = days * 86400L + t->tm_hour * 3600L + t->tm_min * 60L + t->tm_sec;
 	return (time_t)seconds;
 }
-static time_t MakeTimeUTC(int year, int month, int day, int hour, int minute) {
+static time_t MakeTimeUTC(int year, int month, int day, int hour, int minute, int second) {
 	struct tm tm_time = {};
 	tm_time.tm_year = year - 1900;
 	tm_time.tm_mon = month - 1;
 	tm_time.tm_mday = day;
 	tm_time.tm_hour = hour;
 	tm_time.tm_min = minute;
-	tm_time.tm_sec = 0;
+	tm_time.tm_sec = second;
 	return timegm_compat(&tm_time);
 }
 
@@ -113,6 +113,8 @@ void AlarmManager::LoadFromSettings() {
 		alarm.day = cJSON_GetObjectItem(item, "day")->valueint;
 		alarm.hour = cJSON_GetObjectItem(item, "hour")->valueint;
 		alarm.minute = cJSON_GetObjectItem(item, "minute")->valueint;
+		cJSON* sec = cJSON_GetObjectItem(item, "second");
+		if (cJSON_IsNumber(sec)) alarm.second = sec->valueint; else alarm.second = 0;
 		cJSON* wd = cJSON_GetObjectItem(item, "weekdays");
 		if (cJSON_IsNumber(wd)) alarm.weekdays_mask = (uint16_t)wd->valueint;
 		cJSON* label = cJSON_GetObjectItem(item, "label");
@@ -137,6 +139,7 @@ void AlarmManager::SaveToSettings() {
 		cJSON_AddNumberToObject(item, "day", alarm.day);
 		cJSON_AddNumberToObject(item, "hour", alarm.hour);
 		cJSON_AddNumberToObject(item, "minute", alarm.minute);
+		cJSON_AddNumberToObject(item, "second", alarm.second);
 		cJSON_AddNumberToObject(item, "weekdays", alarm.weekdays_mask);
 		cJSON_AddStringToObject(item, "label", alarm.label.c_str());
 		cJSON_AddItemToArray(root, item);
@@ -154,7 +157,7 @@ void AlarmManager::RecalculateNextTrigger(AlarmItem& item, time_t now) {
 	struct tm* tm_now = gmtime(&now);
 	if (!tm_now) { item.next_trigger = 0; return; }
 	if (item.type == AlarmType::OneShot) {
-		time_t t = MakeTimeUTC(item.year, item.month, item.day, item.hour, item.minute);
+		time_t t = MakeTimeUTC(item.year, item.month, item.day, item.hour, item.minute, item.second);
 		if (t <= now) {
 			// 已经过期，禁用
 			item.enabled = false;
@@ -166,7 +169,7 @@ void AlarmManager::RecalculateNextTrigger(AlarmItem& item, time_t now) {
 		struct tm tm_target = *tm_now;
 		tm_target.tm_hour = item.hour;
 		tm_target.tm_min = item.minute;
-		tm_target.tm_sec = 0;
+		tm_target.tm_sec = item.second;
 		time_t candidate = timegm_compat(&tm_target);
 		if (candidate <= now) candidate += 24 * 3600;
 		item.next_trigger = candidate;
@@ -182,7 +185,7 @@ void AlarmManager::RecalculateNextTrigger(AlarmItem& item, time_t now) {
 				struct tm tm_target = *tm_cand;
 				tm_target.tm_hour = item.hour;
 				tm_target.tm_min = item.minute;
-				tm_target.tm_sec = 0;
+				tm_target.tm_sec = item.second;
 				time_t t = timegm_compat(&tm_target);
 				if (t > now) { item.next_trigger = t; return; }
 			}
@@ -207,7 +210,7 @@ void AlarmManager::RecalculateNextTrigger(AlarmItem& item, time_t now) {
 				mdays = leap ? 29 : 28;
 			}
 			if (day > mdays) { month++; continue; }
-			time_t t = MakeTimeUTC(y, m, day, item.hour, item.minute);
+			time_t t = MakeTimeUTC(y, m, day, item.hour, item.minute, item.second);
 			if (t > now) { item.next_trigger = t; return; }
 			month++;
 		}
@@ -268,7 +271,7 @@ void AlarmManager::OnTimerFired() {
 			char buffer[160];
 			struct tm* tm_now = gmtime(&now);
 			if (tm_now) {
-				snprintf(buffer, sizeof(buffer), "%02d:%02d %s", tm_now->tm_hour, tm_now->tm_min, a.label.c_str());
+				snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d %s", tm_now->tm_hour, tm_now->tm_min, tm_now->tm_sec, a.label.c_str());
 			} else {
 				snprintf(buffer, sizeof(buffer), "%s", a.label.c_str());
 			}
@@ -279,7 +282,7 @@ void AlarmManager::OnTimerFired() {
 				if (display) display->SetChatMessage("assistant", text.c_str());
 			});
 			// 4. 伪装最终识别文本触发服务器回答与 TTS
-			Application::GetInstance().RequestTts("到"+a.label+"的时间了,询问我有没有记得");
+			Application::GetInstance().RequestTts("到"+a.label+"的时间了,询问我有没有完成");
 
 			// 计算下一次
 			if (a.type == AlarmType::OneShot) {
@@ -348,6 +351,7 @@ std::string AlarmManager::ListAlarmsJson() {
 		cJSON_AddStringToObject(item, "type", AlarmTypeToString(a.type).c_str());
 		cJSON_AddNumberToObject(item, "hour", a.hour);
 		cJSON_AddNumberToObject(item, "minute", a.minute);
+		cJSON_AddNumberToObject(item, "second", a.second);
 		cJSON_AddNumberToObject(item, "day", a.day);
 		cJSON_AddNumberToObject(item, "month", a.month);
 		cJSON_AddNumberToObject(item, "year", a.year);
@@ -376,6 +380,7 @@ std::string AlarmManager::NextAlarmJson() {
 	cJSON_AddStringToObject(item, "type", AlarmTypeToString(target->type).c_str());
 	cJSON_AddNumberToObject(item, "hour", target->hour);
 	cJSON_AddNumberToObject(item, "minute", target->minute);
+	cJSON_AddNumberToObject(item, "second", target->second);
 	cJSON_AddStringToObject(item, "label", target->label.c_str());
 	cJSON_AddNumberToObject(item, "time", (double)target->next_trigger);
 	char* str = cJSON_PrintUnformatted(item);
@@ -392,6 +397,7 @@ void AlarmManager::AddMcpTools() {
 		Property("type", kPropertyTypeString),
 		Property("hour", kPropertyTypeInteger, 0, 23),
 		Property("minute", kPropertyTypeInteger, 0, 59),
+		Property("second", kPropertyTypeInteger, 0, 59),
 		Property("day", kPropertyTypeInteger, 1, 31),
 		Property("month", kPropertyTypeInteger, 1, 12),
 		Property("year", kPropertyTypeInteger, 2024, 2100),
@@ -402,6 +408,7 @@ void AlarmManager::AddMcpTools() {
 		tpl.type = ParseAlarmType(props["type"].value<std::string>());
 		tpl.hour = props["hour"].value<int>();
 		tpl.minute = props["minute"].value<int>();
+		tpl.second = props["second"].value<int>();
 		tpl.day = props["day"].value<int>();
 		tpl.month = props["month"].value<int>();
 		tpl.year = props["year"].value<int>();

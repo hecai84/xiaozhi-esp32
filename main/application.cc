@@ -14,6 +14,7 @@
 #include <driver/gpio.h>
 #include <arpa/inet.h>
 #include <font_awesome.h>
+#include "mcp/alarm.h"
 
 #define TAG "Application"
 
@@ -496,6 +497,8 @@ void Application::Start() {
     });
     bool protocol_started = protocol_->Start();
 
+    AlarmManager::GetInstance().Initialize();
+    AlarmManager::GetInstance().AddMcpTools();
     // Print heap stats
     SystemInfo::PrintHeapStats();
     SetDeviceState(kDeviceStateIdle);
