@@ -11,10 +11,11 @@
 
 // 闹钟类型：一次 / 每日 / 每周 / 每月
 enum class AlarmType {
-    OneShot,
-    Daily,
-    Weekly,
-    Monthly
+    OneShot,   // 指定年月日时间执行一次
+    Daily,     // 每天指定时间
+    Weekly,    // 每周按星期掩码的指定时间
+    Monthly,   // 每月指定日与时间
+    Interval   // 按固定间隔执行（interval_seconds）
 };
 
 struct AlarmItem {
@@ -28,6 +29,7 @@ struct AlarmItem {
     int minute = 0;             // 0-59
     int second = 0;             // 0-59 秒级精度
     uint16_t weekdays_mask = 0; // 每周闹钟使用, bit0=Mon ... bit6=Sun
+    int interval_seconds = 0;   // Interval 类型使用，>=1
     std::string label;          // 文字标签
     time_t next_trigger = 0;    // 下次触发时间（UTC）
 };

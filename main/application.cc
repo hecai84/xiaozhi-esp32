@@ -782,19 +782,21 @@ void Application::RequestTts(const std::string &text)
 {
     if (device_state_ != kDeviceStateIdle)
     {
-        if (protocol_)
-        {
-            protocol_->SendWakeWordDetected(text);
-        }
+        Schedule([this, text]() {
+            if (protocol_) {
+                protocol_->SendWakeWordDetected(text); 
+            }
+        }); 
     }
     else
     {
         ToggleChatState();
         vTaskDelay(pdMS_TO_TICKS(500));
-        if (protocol_)
-        {
-            protocol_->SendWakeWordDetected(text);
-        }
+        Schedule([this, text]() {
+            if (protocol_) {
+                protocol_->SendWakeWordDetected(text); 
+            }
+        }); 
     }
 }
 

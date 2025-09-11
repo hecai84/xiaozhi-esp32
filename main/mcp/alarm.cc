@@ -56,6 +56,7 @@ static std::string AlarmTypeToString(AlarmType t) {
 		case AlarmType::Daily: return "daily";
 		case AlarmType::Weekly: return "weekly";
 		case AlarmType::Monthly: return "monthly";
+		case AlarmType::Interval: return "interval";
 	}
 	return "unknown";
 }
@@ -65,6 +66,7 @@ static AlarmType ParseAlarmType(const std::string& s) {
 	if (s == "daily") return AlarmType::Daily;
 	if (s == "weekly") return AlarmType::Weekly;
 	if (s == "monthly") return AlarmType::Monthly;
+	if (s == "interval") return AlarmType::Interval;
 	return AlarmType::OneShot;
 }
 
@@ -99,6 +101,7 @@ void AlarmManager::LoadFromSettings() {
 		cJSON_Delete(root);
 		return;
 	}
+	ESP_LOGI(TAG, "Loaded alarms:%s", json.c_str());
 	alarms_.clear();
 	int count = cJSON_GetArraySize(root);
 	for (int i = 0; i < count; ++i) {
@@ -117,6 +120,8 @@ void AlarmManager::LoadFromSettings() {
 		if (cJSON_IsNumber(sec)) alarm.second = sec->valueint; else alarm.second = 0;
 		cJSON* wd = cJSON_GetObjectItem(item, "weekdays");
 		if (cJSON_IsNumber(wd)) alarm.weekdays_mask = (uint16_t)wd->valueint;
+		cJSON* interval = cJSON_GetObjectItem(item, "interval");
+		if (cJSON_IsNumber(interval)) alarm.interval_seconds = interval->valueint;
 		cJSON* label = cJSON_GetObjectItem(item, "label");
 		if (cJSON_IsString(label)) alarm.label = label->valuestring;
 		alarms_.push_back(alarm);
@@ -141,6 +146,9 @@ void AlarmManager::SaveToSettings() {
 		cJSON_AddNumberToObject(item, "minute", alarm.minute);
 		cJSON_AddNumberToObject(item, "second", alarm.second);
 		cJSON_AddNumberToObject(item, "weekdays", alarm.weekdays_mask);
+		if (alarm.type == AlarmType::Interval) {
+			cJSON_AddNumberToObject(item, "interval", alarm.interval_seconds);
+		}
 		cJSON_AddStringToObject(item, "label", alarm.label.c_str());
 		cJSON_AddItemToArray(root, item);
 	}
@@ -215,6 +223,13 @@ void AlarmManager::RecalculateNextTrigger(AlarmItem& item, time_t now) {
 			month++;
 		}
 		item.next_trigger = 0;
+	} else if (item.type == AlarmType::Interval) {
+		// 如果首次（next_trigger==0）或已过期，则从当前时间开始加 interval
+		int interval = item.interval_seconds;
+		if (interval <= 0) { interval = 60; } // 默认 60 秒
+		if (item.next_trigger == 0 || item.next_trigger <= now) {
+			item.next_trigger = now + interval;
+		}
 	}
 }
 
@@ -288,6 +303,9 @@ void AlarmManager::OnTimerFired() {
 			if (a.type == AlarmType::OneShot) {
 				a.enabled = false;
 				a.next_trigger = 0;
+			} else if (a.type == AlarmType::Interval) {
+				int interval = a.interval_seconds > 0 ? a.interval_seconds : 60;
+				a.next_trigger = now + interval;
 			} else {
 				RecalculateNextTrigger(a, now + 1); // 避免重复
 			}
@@ -357,6 +375,9 @@ std::string AlarmManager::ListAlarmsJson() {
 		cJSON_AddNumberToObject(item, "year", a.year);
 		cJSON_AddNumberToObject(item, "weekdays", a.weekdays_mask);
 		cJSON_AddNumberToObject(item, "next", (double)a.next_trigger);
+		if (a.type == AlarmType::Interval) {
+			cJSON_AddNumberToObject(item, "interval", a.interval_seconds);
+		}
 		cJSON_AddStringToObject(item, "label", a.label.c_str());
 		cJSON_AddItemToArray(root, item);
 	}
@@ -383,6 +404,9 @@ std::string AlarmManager::NextAlarmJson() {
 	cJSON_AddNumberToObject(item, "second", target->second);
 	cJSON_AddStringToObject(item, "label", target->label.c_str());
 	cJSON_AddNumberToObject(item, "time", (double)target->next_trigger);
+	if (target->type == AlarmType::Interval) {
+		cJSON_AddNumberToObject(item, "interval", target->interval_seconds);
+	}
 	char* str = cJSON_PrintUnformatted(item);
 	std::string out = str ? str : "{}";
 	if (str) cJSON_free(str);
@@ -402,6 +426,7 @@ void AlarmManager::AddMcpTools() {
 		Property("month", kPropertyTypeInteger, 1, 12),
 		Property("year", kPropertyTypeInteger, 2024, 2100),
 		Property("weekdays", kPropertyTypeInteger, 0, 0x7F), // bit mask
+		Property("interval", kPropertyTypeInteger, 1, 86400), // 1s - 24h
 		Property("label", kPropertyTypeString)
 	}), [this](const PropertyList& props)->ReturnValue {
 		AlarmItem tpl;
@@ -413,6 +438,7 @@ void AlarmManager::AddMcpTools() {
 		tpl.month = props["month"].value<int>();
 		tpl.year = props["year"].value<int>();
 		tpl.weekdays_mask = (uint16_t)props["weekdays"].value<int>();
+		tpl.interval_seconds = props["interval"].value<int>();
 		tpl.label = props["label"].value<std::string>();
 		int id = AddAlarm(tpl);
 		ESP_LOGI(TAG, "Add alarm id=%d", id);

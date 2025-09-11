@@ -63,29 +63,45 @@ bool Esp32Camera::Capture() {
     // 显示预览图片
     auto display = dynamic_cast<LvglDisplay*>(Board::GetInstance().GetDisplay());
     if (display != nullptr) {
-        // Create a new preview image
+    // 旋转90度（逆时针）显示预览图
+        const int src_w = fb_->width;
+        const int src_h = fb_->height;
+        const int rot_w = src_h; // 新宽 = 原高
+        const int rot_h = src_w; // 新高 = 原宽
+
         auto img_dsc = (lv_img_dsc_t*)heap_caps_calloc(1, sizeof(lv_img_dsc_t), MALLOC_CAP_8BIT);
-        img_dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
-        img_dsc->header.cf = LV_COLOR_FORMAT_RGB565;
-        img_dsc->header.flags = 0;
-        img_dsc->header.w = fb_->width;
-        img_dsc->header.h = fb_->height;
-        img_dsc->header.stride = fb_->width * 2;
-        img_dsc->data_size = fb_->width * fb_->height * 2;
+        if (!img_dsc) {
+            ESP_LOGE(TAG, "Failed to allocate img desc");
+            return false;
+        }
+        img_dsc->header.magic  = LV_IMAGE_HEADER_MAGIC;
+        img_dsc->header.cf     = LV_COLOR_FORMAT_RGB565;
+        img_dsc->header.flags  = 0;
+        img_dsc->header.w      = rot_w;
+        img_dsc->header.h      = rot_h;
+        img_dsc->header.stride = rot_w * 2;
+        img_dsc->data_size     = rot_w * rot_h * 2;
         img_dsc->data = (uint8_t*)heap_caps_malloc(img_dsc->data_size, MALLOC_CAP_SPIRAM);
-        if (img_dsc->data == nullptr) {
-            ESP_LOGE(TAG, "Failed to allocate memory for preview image");
+        if (!img_dsc->data) {
+            ESP_LOGE(TAG, "Failed to allocate rotated image buffer");
             heap_caps_free(img_dsc);
             return false;
         }
 
-        auto src = (uint16_t*)fb_->buf;
-        auto dst = (uint16_t*)img_dsc->data;
-        size_t pixel_count = fb_->len / 2;
-        for (size_t i = 0; i < pixel_count; i++) {
-            // 交换每个16位字内的字节
-            dst[i] = __builtin_bswap16(src[i]);
+        const uint16_t* src = (const uint16_t*)fb_->buf;
+        uint16_t* dst = (uint16_t*)img_dsc->data;
+        // 映射关系（逆时针90度）：dest(x,y) <- src( y_src = x, x_src = src_w - 1 - y )
+        // 验证：原点(0,0) -> 逆时针后应在左上列? 原(0,0) => dest(x=0,y=src_w-1)
+        for (int y = 0; y < rot_h; ++y) {       // y: 0..src_w-1 (目标行)
+            for (int x = 0; x < rot_w; ++x) {   // x: 0..src_h-1 (目标列)
+                int src_y = x;                  // 原图行
+                int src_x = src_w - 1 - y;      // 原图列（水平翻转）
+                uint16_t pixel = src[src_y * src_w + src_x];
+                // 保持原逻辑字节交换
+                dst[y * rot_w + x] = __builtin_bswap16(pixel);
+            }
         }
+
         display->SetPreviewImage(img_dsc);
     }
     return true;
