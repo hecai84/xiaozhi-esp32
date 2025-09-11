@@ -789,7 +789,12 @@ void Application::RequestTts(const std::string &text)
     }
     else
     {
-        WakeWordInvoke(text);
+        ToggleChatState();
+        vTaskDelay(pdMS_TO_TICKS(500));
+        if (protocol_)
+        {
+            protocol_->SendWakeWordDetected(text);
+        }
     }
 }
 
