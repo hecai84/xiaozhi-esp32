@@ -3,6 +3,7 @@
 #include "settings.h"
 #include "lvgl_theme.h"
 #include "assets/lang_config.h"
+#include "lvgl_display/emoji_collection.h"
 
 #include <vector>
 #include <algorithm>
@@ -59,6 +60,21 @@ void LcdDisplay::InitializeLcdThemes() {
     auto& theme_manager = LvglThemeManager::GetInstance();
     theme_manager.RegisterTheme("light", light_theme);
     theme_manager.RegisterTheme("dark", dark_theme);
+
+    // If no assets override later, provide a default GIF emoji collection
+    // Choose size based on display height (heuristic): use 64 for larger screens
+    if (!light_theme->emoji_collection() || !dark_theme->emoji_collection()) {
+        std::shared_ptr<EmojiCollection> default_emojis;
+        if (height_ >= 240) {
+            default_emojis = std::make_shared<Twemoji64>();
+            ESP_LOGI(TAG, "[EMOJI_DBG] Using default Twemoji64 GIF collection");
+        } else {
+            default_emojis = std::make_shared<Twemoji32>();
+            ESP_LOGI(TAG, "[EMOJI_DBG] Using default Twemoji32 GIF collection");
+        }
+        light_theme->set_emoji_collection(default_emojis);
+        dark_theme->set_emoji_collection(default_emojis);
+    }
 }
 
 LcdDisplay::LcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel, int width, int height)

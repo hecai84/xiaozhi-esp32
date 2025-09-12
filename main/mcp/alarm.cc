@@ -297,7 +297,7 @@ void AlarmManager::OnTimerFired() {
 				if (display) display->SetChatMessage("assistant", text.c_str());
 			});
 			// 4. 伪装最终识别文本触发服务器回答与 TTS
-			Application::GetInstance().RequestTts("到"+a.label+"的时间了,询问我有没有完成");
+			Application::GetInstance().RequestTts("到"+a.label+"的时间了,做一些交谈");
 
 			// 计算下一次
 			if (a.type == AlarmType::OneShot) {
