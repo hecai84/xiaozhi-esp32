@@ -7,6 +7,7 @@
 #include "websocket_protocol.h"
 #include "assets/lang_config.h"
 #include "mcp_server.h"
+#include "mcp/alarm.h"
 #include "assets.h"
 #include "settings.h"
 
@@ -409,6 +410,7 @@ void Application::Start() {
     auto& mcp_server = McpServer::GetInstance();
     mcp_server.AddCommonTools();
     mcp_server.AddUserOnlyTools();
+    AlarmManager::GetInstance().Initialize();
 
     if (ota.HasMqttConfig()) {
         protocol_ = std::make_unique<MqttProtocol>();
@@ -883,4 +885,25 @@ void Application::SetAecMode(AecMode mode) {
 
 void Application::PlaySound(const std::string_view& sound) {
     audio_service_.PlaySound(sound);
+}
+void Application::RequestTts(const std::string &text)
+{
+    if (device_state_ != kDeviceStateIdle)
+    {
+        Schedule([this, text]() {
+            if (protocol_) {
+                protocol_->SendWakeWordDetected(text); 
+            }
+        }); 
+    }
+    else
+    {
+        ToggleChatState();
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        Schedule([this, text]() {
+            if (protocol_) {
+                protocol_->SendWakeWordDetected(text); 
+            }
+        }); 
+    }
 }
