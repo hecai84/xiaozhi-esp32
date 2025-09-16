@@ -60,24 +60,41 @@ bool Esp32Camera::Capture() {
     auto end_time = esp_timer_get_time();
     ESP_LOGI(TAG, "Camera captured %d frames in %d ms", frames_to_get, int((end_time - start_time) / 1000));
 
-    // 显示预览图片
+    // 显示预览图片（逆时针旋转 90°）
     auto display = dynamic_cast<LvglDisplay*>(Board::GetInstance().GetDisplay());
     if (display != nullptr) {
-        auto data = (uint8_t*)heap_caps_malloc(fb_->len, MALLOC_CAP_SPIRAM);
-        if (data == nullptr) {
-            ESP_LOGE(TAG, "Failed to allocate memory for preview image");
+        // 原始尺寸
+        const int src_w = fb_->width;
+        const int src_h = fb_->height;
+        const size_t dst_size_bytes = fb_->len; // 旋转后像素数量不变
+
+        // 分配旋转后缓冲（RGB565）
+        auto rotated = (uint16_t*)heap_caps_malloc(dst_size_bytes, MALLOC_CAP_SPIRAM);
+        if (rotated == nullptr) {
+            ESP_LOGE(TAG, "Failed to allocate memory for rotated preview image");
             return false;
         }
 
-        auto src = (uint16_t*)fb_->buf;
-        auto dst = (uint16_t*)data;
-        size_t pixel_count = fb_->len / 2;
-        for (size_t i = 0; i < pixel_count; i++) {
-            // 交换每个16位字内的字节
-            dst[i] = __builtin_bswap16(src[i]);
+        const uint16_t* src = reinterpret_cast<const uint16_t*>(fb_->buf);
+        uint16_t* dst = rotated;
+
+        // 逆时针 90°: (x, y) -> (x' = y, y' = src_w - 1 - x)
+        // 新宽 = src_h, 新高 = src_w
+        const int new_w = src_h;
+        const int new_h = src_w;
+
+        for (int y = 0; y < src_h; ++y) {
+            const int src_row_offset = y * src_w;
+            for (int x = 0; x < src_w; ++x) {
+                int dst_x = y;
+                int dst_y = src_w - 1 - x;
+                size_t dst_index = static_cast<size_t>(dst_y) * new_w + dst_x;
+                // 字节序转换（与原先保持一致）
+                dst[dst_index] = __builtin_bswap16(src[src_row_offset + x]);
+            }
         }
 
-        auto image = std::make_unique<LvglAllocatedImage>(data, fb_->len, fb_->width, fb_->height, fb_->width * 2, LV_COLOR_FORMAT_RGB565);
+        auto image = std::make_unique<LvglAllocatedImage>(reinterpret_cast<uint8_t*>(rotated), dst_size_bytes, new_w, new_h, new_w * 2, LV_COLOR_FORMAT_RGB565);
         display->SetPreviewImage(std::move(image));
     }
     return true;
