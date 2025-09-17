@@ -390,6 +390,7 @@ std::string AlarmManager::ListAlarmsJson() {
 		}
 		cJSON_AddStringToObject(item, "label", a.label.c_str());
 		cJSON_AddItemToArray(root, item);
+        ESP_LOGI(TAG,"Alarm id=%d label=%s type=%s next=%ld", a.id, a.label.c_str(), AlarmTypeToString(a.type).c_str(), (long)a.next_trigger);
 	}
 	char* str = cJSON_PrintUnformatted(root);
 	std::string out = str ? str : "[]";
