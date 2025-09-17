@@ -49,6 +49,19 @@ static time_t MakeTimeUTC(int year, int month, int day, int hour, int minute, in
 	tm_time.tm_sec = second;
 	return timegm_compat(&tm_time);
 }
+static std::string FormatTime(time_t t) {
+    struct tm* tm_time = gmtime(&t);
+    if (!tm_time) return "invalid";
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d",
+        tm_time->tm_year + 1900,
+        tm_time->tm_mon + 1,
+        tm_time->tm_mday,
+        tm_time->tm_hour,
+        tm_time->tm_min,
+        tm_time->tm_sec);
+    return std::string(buf);
+}
 
 static std::string AlarmTypeToString(AlarmType t) {
 	switch (t) {
@@ -384,18 +397,19 @@ std::string AlarmManager::ListAlarmsJson() {
 		cJSON_AddNumberToObject(item, "month", a.month);
 		cJSON_AddNumberToObject(item, "year", a.year);
 		cJSON_AddNumberToObject(item, "weekdays", a.weekdays_mask);
-		cJSON_AddNumberToObject(item, "next", (double)a.next_trigger);
+		cJSON_AddStringToObject(item, "next", FormatTime(a.next_trigger).c_str());
 		if (a.type == AlarmType::Interval) {
 			cJSON_AddNumberToObject(item, "interval", a.interval_seconds);
 		}
 		cJSON_AddStringToObject(item, "label", a.label.c_str());
 		cJSON_AddItemToArray(root, item);
-        ESP_LOGI(TAG,"Alarm id=%d label=%s type=%s next=%ld", a.id, a.label.c_str(), AlarmTypeToString(a.type).c_str(), (long)a.next_trigger);
+        ESP_LOGI(TAG,"Alarm id=%d label=%s type=%s next=%s", a.id, a.label.c_str(), AlarmTypeToString(a.type).c_str(), FormatTime(a.next_trigger).c_str());
 	}
 	char* str = cJSON_PrintUnformatted(root);
 	std::string out = str ? str : "[]";
 	if (str) cJSON_free(str);
 	cJSON_Delete(root);
+    ESP_LOGI(TAG, "ListAlarmsJson: %s", out.c_str());
 	return out;
 }
 
