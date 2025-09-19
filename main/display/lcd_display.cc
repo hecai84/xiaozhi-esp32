@@ -3,6 +3,8 @@
 #include "settings.h"
 #include "lvgl_theme.h"
 #include "assets/lang_config.h"
+#include "protocols/http_protocol.h"
+
 
 #include <vector>
 #include <algorithm>
@@ -904,12 +906,17 @@ void LcdDisplay::SetPreviewImage(std::unique_ptr<LvglImage> image) {
     ESP_ERROR_CHECK(esp_timer_start_once(preview_timer_, PREVIEW_IMAGE_DURATION_MS * 1000));
 }
 
+
 void LcdDisplay::SetChatMessage(const char* role, const char* content) {
     DisplayLockGuard lock(this);
     if (chat_message_label_ == nullptr) {
         return;
     }
     lv_label_set_text(chat_message_label_, content);
+    if (strcmp(role, "system") != 0 && content && content[0] != '%') {
+        HttpEnqueueChatMessage(role, content);
+        ESP_LOGI(TAG, "Send record: %s: %s", role, content);
+    }
 }
 #endif
 
